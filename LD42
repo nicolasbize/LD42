@@ -39,14 +39,15 @@ Final score = daily money + accumulated tip money
 
 TASK BREAKDOWN:
 [ ] Draw sprites: 2 cars, 2 people, main char, background
-[ ] Car control
+[X] Car control
 [ ] Going into / Leaving car
-[ ] GUI with time / $$$
+[X] GUI with time / $$$
 [ ] AI
-[ ] Collisions
+[X] Collisions
 [ ] Main menu (NEW GAME, HOW TO PLAY, HIGH SCORES)
 [ ] Levels (more cars, etc.)
 [ ] Music
 [ ] FX
 [ ] End screen
 [ ] Terrible boss image
+
