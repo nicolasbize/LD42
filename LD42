@@ -1,0 +1,52 @@
+Running out of space
+====================
+Valet Parking
+-------------
+
+Line of cars in the morning
+Each car tells you the time when they will pick the vehicle back up
+You take the car and park it wherever, but have to be careful not to crash into other cars
+You need to be able to take the cars out by the time
+
+|        |  DAY 1: $$$/TARGET          07:14|
+|        +---------------------------------+
+|        |                                 |
+|    |   |                                 |
+|    |   |                                 |
+|    V   |                                 |
+|   ==   |                                 |
+|        |                                 |
+|        |                                 |
+|        |                                 |
+|   ==   |                                 |
+|        +                                 |
+|                                          |
+|        |                                 |
+|        |                                 |
+|                                          |
+|        +                                 |
+|   ==   |                                 |
+|        |                                 |
+|        |                                 |
+|   ==   +---------------------------------+
+
+Horrible boss who asks for more money every day.
+Final score = daily money + accumulated tip money
+- cars come in between 7AM and 12PM
+- cars leave between 4PM and 9PM
+- if there is still a car at midnight, you're fired
+
+
+TASK BREAKDOWN:
+[ ] Draw sprites: 2 cars, 2 people, main char, background
+[ ] Car control
+[ ] Going into / Leaving car
+[ ] GUI with time / $$$
+[ ] AI
+[ ] Collisions
+[ ] Main menu (NEW GAME, HOW TO PLAY, HIGH SCORES)
+[ ] Levels (more cars, etc.)
+[ ] Music
+[ ] FX
+[ ] End screen
+[ ] Terrible boss image
