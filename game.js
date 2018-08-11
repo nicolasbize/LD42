@@ -1,11 +1,11 @@
 (function() {
 
   // utility functions
-  function minToTime(mins) {
+  function minToTime(mins, noPrefix) {
     const hours = Math.floor(mins / 60);
     const remnant = mins % 60;
     let txt = "";
-    if (hours < 10) {
+    if (hours < 10 && !noPrefix) {
       txt = "0";
     }
     txt += hours + ":";
@@ -22,12 +22,16 @@
     return min + Math.floor(Math.random() * (max+1-min));
   }
 
-  let walls, player, cursors, currentCar;
+  let wallGroup, npcCarGroup, npcGroup, uiGroup, playerGroup;
+  let player, cursors, currentCar;
   const CAR_FRICTION = 0.97;
   const CAR_MAX_VELOCITY = 300;
   const HUMAN_MAX_VELOCITY = 200;
   const NB_NPC_TYPES = 6;
   const NB_CAR_TYPES = 3;
+  const TIME_GET_IMPATIENT = 5;
+  const TIME_GET_FRUSTRATED = 10;
+  const TIME_GET_MAD = 20;
   let inCar = false;
   let gettingInCar = false;
   let money = 0, time = 7 * 60;
@@ -37,10 +41,14 @@
   const timeSpeed = 60; // the bigger the slower
   const npcStopY = 260;
   const waitingNpcs = [];
+  let pendingCustomers = [];
+  let arrow, arrowTimer = 0, arrowDir = 1;
+
 
   let levelCars = [{
     sprIndex: 0,
     timeArrival: 7 * 60 + 1, // 9AM in min
+    timePickup: 7 * 60 + 10,
     npcSprIndex: random(0, NB_NPC_TYPES-1),
     width: 130,
     height: 78,
@@ -50,6 +58,7 @@
     sprIndex: 1,
     timeArrival: 7 * 60 + 10, // 9AM in min
     npcSprIndex: random(0, NB_NPC_TYPES-1),
+    timePickup: 10 * 60, //8am
     width: 130,
     height: 78,
     isNPC: true,
@@ -58,6 +67,7 @@
     sprIndex: 2,
     timeArrival: 7 * 60 + 20, // 9AM in min
     npcSprIndex: random(0, NB_NPC_TYPES-1),
+    timePickup: 10 * 60, //8am
     width: 130,
     height: 78,
     isNPC: true,
@@ -89,35 +99,37 @@
       this.load.image('npc-'+i, 'assets/sprites/npc-'+i+'.png');
     }
     this.load.image('speech-bubble', 'assets/sprites/speech-bubble.png');
+    this.load.image('waiting', 'assets/sprites/waiting.png');
+    this.load.image('happy', 'assets/sprites/happy.png');
+    this.load.image('angry', 'assets/sprites/angry.png');
+    this.load.image('arrow', 'assets/sprites/arrow.png');
     this.load.spritesheet('player', 'assets/sprites/player.png',
       { frameWidth: 25, frameHeight: 51});
   };
 
   scene.create = function() {
     this.add.image(0, 0, 'background').setOrigin(0, 0);
-    walls = this.physics.add.staticGroup();
+
+    wallGroup = this.physics.add.staticGroup();
     // LEFT WALL
-    walls.create(205+10/2, 0+316/2, 'wall-left-top');
-    walls.create(205+10/2, 490+172/2, 'wall-left-bottom');
+    wallGroup.create(205+10/2, 0+316/2, 'wall-left-top');
+    wallGroup.create(205+10/2, 490+172/2, 'wall-left-bottom');
     // TOP WALL
-    walls.create(215+800/2, 61+10/2, 'wall-bottom');
+    wallGroup.create(215+800/2, 61+10/2, 'wall-bottom');
     // BOTTOM WALL
-    walls.create(215+800/2, 652+10/2, 'wall-bottom');
+    wallGroup.create(215+800/2, 652+10/2, 'wall-bottom');
     // RIGHT WALL
-    walls.create(1014+10/2, 0+662/2, 'wall-right');
-    walls.create(215+140/2, 196+120/2, 'booth');
+    wallGroup.create(1014+10/2, 0+662/2, 'wall-right');
+    wallGroup.create(215+140/2, 196+120/2, 'booth');
 
-    // currentCar = this.physics.add.sprite(500, 200, 'car-0');
-    // currentCar.setCollideWorldBounds(true);
-    // // currentCar.setBounce(0.2);
-    // currentCar.setMaxVelocity(CAR_MAX_VELOCITY, CAR_MAX_VELOCITY);
-    // currentCar.speed = 0;
-    // currentCar.body.moves = false;
-    // currentCar.body.setSize(130, 78, true);
-    // currentCar.bodyHorizontal = true;
+    npcCarGroup = this.physics.add.group({});
+    playerGroup = this.physics.add.group({
+      collideWorldBounds: true,
+    });
+    npcGroup = this.physics.add.group({});
+    uiGroup = this.physics.add.group({});
 
-    player = this.physics.add.sprite(400, 250, 'player');
-    player.setCollideWorldBounds(true);
+    player = playerGroup.create(400, 250, 'player');
     this.anims.create({
       key: 'moving',
       frames: this.anims.generateFrameNumbers('player', {
@@ -126,27 +138,28 @@
     });
     player.speed = 0;
 
-    // prepare collisions
-    // this.physics.add.collider(currentCar, walls);
-    this.physics.add.collider(player, walls);
+    // prepare collisions: player collides with world, cars, npcs and walls
+    this.physics.add.collider(player, wallGroup);
+    this.physics.add.collider(player, npcCarGroup, function(p, c) {
+      p.nearest = c;
+    });
+    this.physics.add.collider(player, npcGroup);
 
-    // this.physics.add.collider(player, currentCar, function(p, c) {
-    //   p.nearest = c;
-    // });
-
+    // keyboard interaction
     cursors = this.input.keyboard.createCursorKeys();
 
     // GUI
     // textCurrentMoney
     textTime = this.add.text(800, 20, minToTime(time), {
-      fontFamily: 'gameplay', fontSize: 34, color: '#FFF' });
+      fontFamily: 'gameplay', fontSize: 34, color: '#FFF' }, uiGroup);
     textMoney = this.add.text(230, 20, "$" + money, {
-      fontFamily: 'gameplay', fontSize: 34, color: '#FFF' });
+      fontFamily: 'gameplay', fontSize: 34, color: '#FFF' }, uiGroup);
+    arrow = uiGroup.create(10, 10, 'arrow');
 
   };
 
   scene.initializeCarSprite = function(car) {
-    const carSprite = this.physics.add.sprite(
+    const carSprite = npcCarGroup.create(
           214/2, -car.height / 2-5, 'car-' + car.sprIndex);
     carSprite.speed = 0;
     carSprite.body.moves = false;
@@ -155,9 +168,6 @@
     carSprite.body.setSize(car.height, car.width, true);
     carSprite.bodyHorizontal = true;
     carSprite.data = car;
-    this.physics.add.collider(player, carSprite, function(p, c) {
-      p.nearest = c;
-    });
     return carSprite;
   };
 
@@ -300,16 +310,18 @@
         car.data.npcSprite && car.data.npcSprite.body.enable) {
       car.data.npcSprite.disableBody(true, true);
       waitingNpcs
-        .filter((npc) => npc.waitingForPicking)
+        .filter((npc) => npc.waitingForService)
         .forEach((npc) => {
           if (npc.speech) {
             npc.speech.destroy();
             npc.speechText.destroy();
-            npc.waitingForPicking = false;
+            npc.waitingForService = false;
+            npc.willPickupCar = true;
           }
         });
     }
     car.data.isNPC = false;
+
     car.setCollideWorldBounds(true);
     car.setBounce(0.2);
     car.setMaxVelocity(CAR_MAX_VELOCITY, CAR_MAX_VELOCITY);
@@ -321,7 +333,8 @@
     } else {
       car.body.setSize(car.data.height, car.data.width, true);
     }
-    this.physics.add.collider(car, walls);
+    this.physics.add.collider(car, wallGroup);
+    this.physics.add.collider(car, npcCarGroup);
 
     setTimeout(function() {
       gettingInCar = false;
@@ -377,8 +390,9 @@
         car.data.npcSprite = npcSprite;
         waitingNpcs.push({
           sprite: npcSprite,
-          waitingForPicking: true,
+          waitingForService: true,
           hasWaitedFor: 0,
+          timePickup: car.data.timePickup,
           car: car,
         });
 
@@ -387,21 +401,83 @@
     }
   };
 
+  // current car to move out
+  scene.updateCurrentTargetCar = function() {
+    let displayed = false;
+
+    if (pendingCustomers.length > 0) {
+      const nextCustomer = pendingCustomers[0];
+      const car = nextCustomer.car;
+      if (!inCar || (currentCar != car)) {
+        displayed = true;
+        this.scene.bringToTop(arrow);
+        arrow.y = car.y - 100;
+        arrow.x = car.x;
+      }
+    }
+    arrowTimer += 1;
+    arrow.y += arrowDir;
+    if (arrowTimer == 10) {
+      arrowTimer = 0;
+      arrowDir *= -1;
+    }
+    if (!displayed) {
+      arrow.x = -1000;
+    }
+  }
+
   scene.updateWaitingNpcs = function() {
     waitingNpcs.forEach((npc) => {
-      npc.hasWaitedFor += 1;
-      if (npc.waitingForPicking && npc.hasWaitedFor == 60) {
-        npc.speech = this.add.image(
-          npc.sprite.x + 70,
-          npc.sprite.y - 40,
-          'speech-bubble');
-        npc.speechText = this.add.text(
-          npc.speech.x-npc.speech.width/2 + 20,
-          npc.speech.y-npc.speech.height/2 + 5,
-          "3:20PM", {
-            fontFamily: 'gameplay', fontSize: 14, color: '#820b0b'
-          });
+      if (npc.waitingForService) {
+        npc.hasWaitedFor += 1;
+        if (npc.hasWaitedFor == 60 && npc.sprite.body.enable) {
+          npc.speech = uiGroup.create(
+            npc.sprite.x + 70,
+            npc.sprite.y - 40,
+            'speech-bubble');
+
+          npc.speechText = this.add.text(
+            npc.speech.x-npc.speech.width/2 + 20,
+            npc.speech.y-npc.speech.height/2 + 5,
+            minToTime(npc.timePickup, true), {
+              fontFamily: 'gameplay', fontSize: 14, color: '#820b0b'
+            }, uiGroup);
         }
+      } else if (npc.willPickupCar && !npc.appeared) {
+        if (time === npc.timePickup) {
+          npc.sprite.enableBody(
+            false, 0, 0, true, true);
+          npc.sprite.x = 200;
+          npc.sprite.y = 480 + pendingCustomers.length * 20
+          npc.sprite.angle = random(-75, -105);
+          npc.appeared = true;
+          pendingCustomers.push(npc);
+        }
+      } else if (npc.appeared) {
+        if (time === npc.timePickup + TIME_GET_IMPATIENT && !npc.waiting) {
+          npc.waiting = uiGroup.create(
+            npc.sprite.x + 40,
+            npc.sprite.y - 40,
+            'waiting');
+        } else if (time > npc.timePickup + TIME_GET_FRUSTRATED &&
+                   time < npc.timePickup + TIME_GET_MAD) {
+          if (random(1, 20) === 5) {
+            npc.sprite.angle = random(-85, -95);
+          }
+        } else if (time === npc.timePickup + TIME_GET_MAD && !npc.mad) {
+          npc.waiting.destroy();
+          npc.angry = uiGroup.create(
+            npc.sprite.x + 40,
+            npc.sprite.y - 40,
+            'angry');
+          npc.mad = true;
+        } else if (time > npc.timePickup + TIME_GET_MAD) {
+          if (random(1, 10) == 1) {
+            npc.sprite.angle = random(-80, -100);
+          }
+        }
+      }
+
     })
   };
 
@@ -409,6 +485,7 @@
     this.updateTime();
     textMoney.setText("$" + money);
     this.updateWaitingNpcs();
+    this.updateCurrentTargetCar();
     if (inCar) {
       this.updateControlledCar();
     } else {
