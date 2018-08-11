@@ -6,20 +6,49 @@
   const HUMAN_MAX_VELOCITY = 200;
   let inCar = false;
   let gettingInCar = false;
+  let pixel, debugPxl;
+  let money = 0, time = 7 * 60;
+  let textCurrentMoney, textTime;
+  let cars = [];
+  let timer = 0;
+  let timeSpeed = 60; // the bigger the slower
+
+  let levelCars = [{
+    sprIndex: 0,
+    timeArrival: 540, // 9AM in min
+    willStayFor: 120+15*Math.floor(Math.random() * 16),
+    width: 130,
+    height: 78,
+    willWaitFor: 15, // how long the person will wait
+    hasWaitedFor: 0,
+    isNPC: true,
+  }];
 
   function sinDegrees(angle) {return Math.sin(angle/180*Math.PI);};
   function cosDegrees(angle) {return Math.cos(angle/180*Math.PI);};
+  function minToTime(mins) {
+    const hours = Math.floor(mins / 60);
+    const remnant = mins % 60;
+    let txt = "";
+    if (hours < 10) {
+      txt = "0";
+    }
+    txt += hours + ":";
+    if (remnant < 10) {
+      txt += "0";
+    }
+    txt += remnant;
+    txt += (hours < 12) ? "AM" : "PM"
+    return txt;
+  }
 
   new Phaser.Game({
     type: Phaser.AUTO,
-    width: 680,
-    height: 440,
+    width: 1024,
+    height: 662,
     physics: {
       default: 'arcade',
-      debug: true,
     },
-    drawDebug: true,
-    debugGraphic: true,
     scene: {
       preload: function() {
         this.load.image('background', 'assets/backgrounds/main.png');
@@ -34,33 +63,35 @@
         this.load.image('booth', 
           'assets/backgrounds/booth.png');
 
+        // this.load.image('pixel', 'assets/debug-pixel.png');
+
         // sprites
         this.load.image('yellow-car', 'assets/sprites/car-yellow.png');
         this.load.spritesheet('player', 'assets/sprites/player.png',
-          { frameWidth: 11, frameHeight: 22});
+          { frameWidth: 25, frameHeight: 51});
 
       },
       create: function() {
         this.add.image(0, 0, 'background').setOrigin(0, 0);
         walls = this.physics.add.staticGroup();
         // LEFT WALL
-        walls.create(136+10/2, 40+170/2, 'wall-left-top');
-        walls.create(136+10/2, 40+276+124/2, 'wall-left-bottom');
+        walls.create(205+10/2, 0+316/2, 'wall-left-top');
+        walls.create(205+10/2, 490+172/2, 'wall-left-bottom');
         // TOP WALL
-        walls.create(146+528/2, 40+6/2, 'wall-bottom');
+        walls.create(215+800/2, 61+10/2, 'wall-bottom');
         // BOTTOM WALL
-        walls.create(146+528/2, 40+394+6/2, 'wall-bottom');
+        walls.create(215+800/2, 652+10/2, 'wall-bottom');
         // RIGHT WALL
-        walls.create(674+6/2, 40+400/2, 'wall-right');
-        walls.create(146+84/2, 40+98+72/2, 'booth');
+        walls.create(1014+10/2, 0+662/2, 'wall-right');
+        walls.create(215+140/2, 196+120/2, 'booth');
 
-        currentCar = this.physics.add.sprite(300, 200, 'yellow-car');
+        currentCar = this.physics.add.sprite(500, 200, 'yellow-car');
         currentCar.setCollideWorldBounds(true);
         // currentCar.setBounce(0.2);
         currentCar.setMaxVelocity(CAR_MAX_VELOCITY, CAR_MAX_VELOCITY);
         currentCar.speed = 0;
         currentCar.body.moves = false;
-        currentCar.body.setSize(85, 50, true);
+        currentCar.body.setSize(130, 78, true);
         currentCar.bodyHorizontal = true;
 
         player = this.physics.add.sprite(400, 250, 'player');
@@ -81,8 +112,22 @@
         });
 
         cursors = this.input.keyboard.createCursorKeys();
+
+        // GUI
+        // textCurrentMoney
+        textTime = this.add.text(850, 20, minToTime(time), { fontFamily: 'Monospace', fontSize: 34, color: '#FFF' });
+        textMoney = this.add.text(230, 20, "$" + money, { fontFamily: 'Monospace', fontSize: 34, color: '#FFF' });
+
+        // debugPxl = this.add.image(10, 0, 'dpixel');
       },
       update: function() {
+        timer += 1;
+        if (timer >= timeSpeed) {
+          timer = 0;
+          time += 1;
+          textTime.setText(minToTime(time));
+        }
+        textMoney.setText("$" + money);
         if (inCar) {
           currentCar.body.angularVelocity = 0;
           currentCar.acceleration = 10;
@@ -93,12 +138,12 @@
             ((currentCar.angle > 45 && currentCar.angle < 135) ||
              (currentCar.angle > -135 && currentCar.angle < -45))) {
             currentCar.bodyHorizontal = false;
-            currentCar.body.setSize(50, 85, true);
-          } else if (currentCar.bodyHorizontal && 
-            ((currentCar.angle > 45 && currentCar.angle < 135) ||
-             (currentCar.angle > -135 && currentCar.angle < -45))) {
+            currentCar.body.setSize(78, 130, true);
+          } else if (!currentCar.bodyHorizontal && 
+            ((currentCar.angle < 45 && currentCar.angle > -45) ||
+             (currentCar.angle > 135 && currentCar.angle < 225))) {
             currentCar.bodyHorizontal = true;
-            currentCar.body.setSize(85, 50, true);
+            currentCar.body.setSize(130, 78, true);
           }
 
           const s = currentCar.speed > 0 ? 1 : -1;
@@ -133,8 +178,21 @@
 
           if (cursors.space.isDown && currentCar.speed < 10 && !gettingInCar) {
             // calculate the coordinate of the player
-            const doorX = currentCar.x + 35 * Math.sin(currentCar.angle);
-            const doorY = currentCar.y - 35 * Math.cos(currentCar.angle);
+            let doorX, doorY;
+            if (!currentCar.bodyHorizontal && currentCar.angle > 45 && currentCar.angle < 135) {
+              doorX = currentCar.x + 60;
+              doorY = currentCar.y + 15;
+              // looking up
+            } else if (!currentCar.bodyHorizontal && currentCar.angle > -135 && currentCar.angle < -45) {
+              doorX = currentCar.x - 60;
+              doorY = currentCar.y - 15;
+            } else if (currentCar.bodyHorizontal && currentCar.angle < 45 && currentCar.angle > -45) {
+              doorX = currentCar.x + 15;
+              doorY = currentCar.y - 60;
+            } else {
+              doorX = currentCar.x - 15;
+              doorY = currentCar.y + 60;
+            }
             inCar = false;
             currentCar.body.moves = false;
             player.enableBody(false, doorX, doorY, true, true);
@@ -175,14 +233,11 @@
           if (cursors.space.isDown && player.nearest && !gettingInCar) {
             // calculate the coordinate of the door
             const car = player.nearest;
-            const doorX = car.x + 25 * Math.sin(car.angle);
-            const doorY = car.y - 25 * Math.cos(car.angle);
-
             // check distance with latest collided car
-            const a = Math.abs(player.x - doorX);
-            const b = Math.abs(player.y - doorY);
+            const a = Math.abs(player.x - car.x);
+            const b = Math.abs(player.y - car.y);
             const dist = Math.sqrt(a*a + b*b);
-            if (dist < 25) {
+            if (dist < 70) {
               inCar = true;
               car.body.moves = true;
               player.disableBody(true, true);
