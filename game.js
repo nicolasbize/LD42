@@ -54,6 +54,8 @@
   let wallGroup, npcCarGroup, npcGroup, uiGroup, playerGroup;
   let player, cursors, currentCar, deliveryZone;
   let music;
+  let hasPlayerLost = false;
+  let hasPlayerWon = false;
   let sndMoney, sndDoorOpen, sndDoorClose, sndWaiting, sndSteps, sndCar;
   let inCar = false;
   let gettingInCar = false;
@@ -154,6 +156,7 @@
   };
 
   gameScene.create = function() {
+    hasPlayerLost = false;
     this.add.image(0, 0, 'background').setOrigin(0, 0);
     deliveryZone = this.add.image(103, 550, 'loading-zone');
 
@@ -584,6 +587,11 @@
               fontFamily: 'gameplay', fontSize: 14, color: '#820b0b'
             }, uiGroup);
         }
+        if (npc.timePickup === time) {
+          // we basically lost at this point...
+          hasPlayerLost = true;
+          this.scene.start('PreLevel');
+        }
       }
     }
   }
@@ -717,6 +725,7 @@
   }
 
   menuScene.create = function() {
+    hasPlayerLost = false;
     menuBg = this.add.image(0, 0, 'menu-bg').setOrigin(0, 0);
     this.add.text(410, 420, "USE ARROWS+SPACE", {
       fontFamily: 'gameplay', fontSize: 34, color: '#3f3f74' });
@@ -831,17 +840,112 @@
   preLevelScene.create = function() {
     this.add.image(0, 0, 'prelevel').setOrigin(0, 0);
     keyPressed = true;
-    if (isPrevLevelGoodPerf === null) {
-      this.add.text(530, 150,
-        "HA!! ZERE YOU ARE!!\n" +
+    if (hasPlayerLost) {
+      this.add.text(530, 120, "YOU LOST!", {
+        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
+      this.add.text(530, 200,
+        "WHAT DO YOU ZINC!!\n" +
+        "ZE CUSTOMER AWAITS!!\n\n" +
+        "I GIVE YOU ALL AND ZIS IS\n" +
+        "WHAT I GET BACK?!\n\n" +
+        "YOUR FIRED!! FIRED!!!"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+      this.add.text(530, 450,
+        "THANKS FOR PLAYING!\n" +
+        "FINAL SCORE: $" + actualMoney, {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FBF236' });
+    } else if (hasPlayerWon) {
+      this.add.text(530, 120, "YOU WON!", {
+        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
+      this.add.text(530, 200,
+        "IZ ME AGAIN!!\n\n" +
+        "VINCENT HAPPY BECAUSE\n" +
+        "VINCENT IZ NOW RICH.\n" +
+        "ALSO BECAUSE YOU LEAVE!\n\n" +
+        "HON! HON! THAT WAZ A JOKE!\n\n" +
+        "YOU WANT ZE FRENCH KISS?!"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+      this.add.text(530, 450,
+        "THANKS FOR PLAYING!\n" +
+        "FINAL SCORE: $" + actualMoney, {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FBF236' });
+
+    } else if (currentLevel === 0) {
+      this.add.text(530, 120, "MONDAY", {
+        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
+      this.add.text(530, 200,
+        "HON HON!! ZERE YOU ARE!!\n" +
         "I COULD SMELL YOU FROM\n" +
         "ZE STREET!\n\n" +
-        "ZIS IS YOUR FIRST DAY...\n" +
-        "MAYBE ZE LAST HON HON HON!\n\n" +
+        "YOUR HERE UNTIL FRIDAY...\n" +
+        "IF I DONT FIRE YOU BEFORE!\n\n" +
         "YOUR WORK STARTS AT 1PM\n" +
-        "UNTIL 7PM. DON'T BE LATE!\n\n" +
+        "UNTIL 7PM. NO SLEEP!!\n\n" +
         "NOW GO AND PARK ZE CARS\n" +
         "AND MAKE VINCENT RICH!"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+      this.add.text(650, 620, "HIT SPACE TO CONTINUE"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
+    } else if (currentLevel === 1) {
+      this.add.text(530, 120, "TUESDAY", {
+        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
+      this.add.text(530, 200,
+        "STILL HERE?! HON HON!!\n" +
+        "YOU LIKE PARK ZE CARS?\n\n" +
+        "YOU MAKE ME RICH AND YOU\n" +
+        "WILL GET ZE BAGETTE I GOT!\n\n" +
+        "NOW GO AND STOP WASTING\n" +
+        "ZE TIME OF ZE VINCENT!!\n\n"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+      this.add.text(650, 620, "HIT SPACE TO CONTINUE"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
+    } else if (currentLevel === 2) {
+      this.add.text(530, 120, "WEDNESDAY", {
+        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
+      this.add.text(530, 200,
+        "YOU NOT GIVE UP YET?\n" +
+        "YOU SURE ARE NOT FRENCH!\n\n" +
+        "I NEED TO GO GET MY\n" +
+        "CHEESE FOR ZE WINE!\n\n" +
+        "DON'T YOU HAVE ZE JOB?\n" +
+        "WHY AM I PAYING YOU?!\n\n"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+      this.add.text(650, 620, "HIT SPACE TO CONTINUE"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
+    } else if (currentLevel === 3) {
+      this.add.text(530, 120, "THURSDAY", {
+        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
+      this.add.text(530, 200,
+        "LOOK AT ZE NEW CAR I BOUGHT!\n\n" +
+        "DONT FORGET MY CHILD...\n\n" +
+        "IF YOU TOO WORK REALLY,\n" +
+        "REALLY REALLY HARD... THEN\n" +
+        "MAYBE I CAN BUY ANOZER ONE.\n\n" +
+        "ARE WE STILL TALKING?!\n\n"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+      this.add.text(650, 620, "HIT SPACE TO CONTINUE"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
+    } else if (currentLevel === 4) {
+      this.add.text(530, 120, "FRIDAY", {
+        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
+      this.add.text(530, 200,
+        "ZIS IS YOUR LAST DAY!\n" +
+        "YOU WILL MISS ME, RITE?\n\n" +
+        "YOUR REALLY A SAD CHILD\n" +
+        "IF YOU DONT COME BACK\n\n" +
+        "YOU WILL ALWAYS HAVE A\n" +
+        "PLACE IN MY HEART AND\n" +
+        "IN MY WALLET.\n\n"
         , {
         fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
       this.add.text(650, 620, "HIT SPACE TO CONTINUE"
@@ -853,7 +957,11 @@
   preLevelScene.update = function() {
     if (cursors.space.isDown && !keyPressed) {
       keyPressed = true;
-      this.scene.start('Game');
+      if (hasPlayerLost) {
+        this.scene.start('MainMenu');
+      } else {
+        this.scene.start('Game');
+      }
     }
     if (!cursors.space.isDown) {
       keyPressed = false;

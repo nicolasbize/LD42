@@ -44,15 +44,17 @@ TASK BREAKDOWN:
 [X] GUI with time / $$$
 [X] AI
 [X] Collisions
-[X] Levels (more cars, etc.)
+[-] Levels (more cars, etc.)
 [X] Music
 [X] FX
 [X] Title screen
 [X] Main menu (NEW GAME, HOW TO PLAY, HIGH SCORES)
-[ ] End screen
+[ ] End of level
+[ ] End of game
 [-] Terrible boss image + funny between levels
-[ ] Polishing, bugfixing
+[-] Polishing, bugfixing
 
+- case where people wait for service for too long...
 
 Bugs:
 - The collisions don't work well with rectangles...
