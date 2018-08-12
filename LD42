@@ -42,15 +42,19 @@ TASK BREAKDOWN:
 [X] Car control
 [X] Going into / Leaving car
 [X] GUI with time / $$$
-[ ] AI
+[X] AI
 [X] Collisions
-[ ] Main menu (NEW GAME, HOW TO PLAY, HIGH SCORES)
-[ ] Levels (more cars, etc.)
+[X] Levels (more cars, etc.)
 [X] Music
-[ ] FX
+[X] FX
+[ ] Title screen
+[ ] Main menu (NEW GAME, HOW TO PLAY, HIGH SCORES)
 [ ] End screen
-[ ] Terrible boss image
+[ ] Terrible boss image + funny between levels
+[ ] Polishing, bugfixing
 
-Music is AWESOME :)
-Time to do some sound...
-Gonna hop on my mac to record a few sounds!
+
+Bugs:
+- Sometimes the people waiting don't disappear
+- The collisions don't work well with rectangles...
+

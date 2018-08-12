@@ -2,9 +2,13 @@
 
   // utility functions
   function minToTime(mins, noPrefix) {
-    const hours = Math.floor(mins / 60);
-    const remnant = mins % 60;
+    let hours = Math.floor(mins / 60);
+    let remnant = mins % 60;
     let txt = "";
+    const am = hours < 12;
+    if (hours > 12) {
+      hours -= 12;
+    }
     if (hours < 10 && !noPrefix) {
       txt = "0";
     }
@@ -13,7 +17,7 @@
       txt += "0";
     }
     txt += remnant;
-    txt += (hours < 12) ? "AM" : "PM"
+    txt += am ? "AM" : "PM"
     return txt;
   }
 
@@ -22,14 +26,27 @@
     return min + Math.floor(Math.random() * (max+1-min));
   }
 
+  function makeCar(sprIndex, timeArrival, timePickup) {
+    return {
+      sprIndex: sprIndex,
+      timeArrival: timeArrival,
+      timePickup: timePickup,
+      npcSprIndex: random(0, NB_NPC_TYPES-1),
+      width: carSizes[sprIndex].w,
+      height: carSizes[sprIndex].h,
+      isNPC: true,
+      readyForPickup: false,
+    }
+  }
+
   const CAR_FRICTION = 0.97;
   const CAR_MAX_VELOCITY = 300;
   const HUMAN_MAX_VELOCITY = 200;
   const NB_NPC_TYPES = 6;
-  const NB_CAR_TYPES = 3;
-  const TIME_GET_IMPATIENT = 5;
-  const TIME_GET_FRUSTRATED = 10;
-  const TIME_GET_MAD = 20;
+  const NB_CAR_TYPES = 8;
+  const TIME_GET_IMPATIENT = 10;
+  const TIME_GET_FRUSTRATED = 20;
+  const TIME_GET_MAD = 30;
   const TINT_NONE = 0xffffff;
   const TINT_SUCCESS = 0x99e550;
   const TINT_WARNING = 0xfbf236;
@@ -40,55 +57,59 @@
   let sndMoney, sndDoorOpen, sndDoorClose, sndWaiting, sndSteps, sndCar;
   let inCar = false;
   let gettingInCar = false;
-  let money = 0, time = 7 * 60;
+  let money = 0, time = 13 * 60;
   let actualMoney = 0;
   let textCurrentMoney, textTime;
   let cars = [];
   let timer = 0;
   let carReadyForCustomer = false;
+  let currentLevel = 0;
   const timeSpeed = 60; // the bigger the slower
   const npcStopY = 260;
-  let waitingNpcs = [];
+  let waitingNpc = null; // waiting with speechbubble for time
   let pendingCustomers = [];
   let leavingCars = [];
   let arrow, arrowTimer = 0, arrowDir = 1;
   let platformTimer = 0;
   let canPlayCarSound = false;
+  let isPrevLevelGoodPerf = null;
 
-  let levelCars = [{
-    sprIndex: 0,
-    timeArrival: 7 * 60 + 1, // 9AM in min
-    timePickup: 7 * 60 + 10,
-    npcSprIndex: random(0, NB_NPC_TYPES-1),
-    width: 130,
-    height: 78,
-    isNPC: true,
-    readyForPickup: false,
-  }, {
-    sprIndex: 1,
-    timeArrival: 7 * 60 + 10, // 9AM in min
-    npcSprIndex: random(0, NB_NPC_TYPES-1),
-    timePickup: 10 * 60, //8am
-    width: 130,
-    height: 78,
-    isNPC: true,
-    readyForPickup: false,
-  }, {
-    sprIndex: 2,
-    timeArrival: 7 * 60 + 20, // 9AM in min
-    npcSprIndex: random(0, NB_NPC_TYPES-1),
-    timePickup: 10 * 60, //8am
-    width: 130,
-    height: 78,
-    isNPC: true,
-    readyForPickup: false,
-  }];
+  const carSizes = [
+    {w: 130, h: 78},
+    {w: 130, h: 78},
+    {w: 130, h: 78},
+    {w: 180, h: 96},
+    {w: 180, h: 90},
+    {w: 130, h: 78},
+    {w: 130, h: 78},
+    {w: 130, h: 78},
+  ]
+
+  let levelCars = [[
+    makeCar(0, 13*60+5, 14*60+15),
+    makeCar(1, 13*60+20, 16*60),
+    makeCar(2, 13*60+35, 17*60+15),
+    makeCar(3, 13*60+45, 15*60+20),
+    makeCar(4, 14*60, 18*60),
+    makeCar(1, 14*60+15, 16*60+10),
+    makeCar(2, 14*60+30, 16*60),
+    makeCar(6, 14*60+45, 17*60),
+    makeCar(7, 15*60, 16*60+30),
+    makeCar(0, 15*60+10, 17*60+20),
+    makeCar(0, 15*60+20, 17*60+30),
+    makeCar(5, 15*60+35, 17*60+30),
+    makeCar(3, 15*60+50, 18*60+15),
+    makeCar(6, 16*60+5, 17*60),
+  ]];
   let npcCars = [];
 
-  const scene = new Phaser.Scene('Game');
+  /******
+   * GAME SCENE
+   ******/
+  const gameScene = new Phaser.Scene('Game');
 
   // LOADING ASSETS
-  scene.preload = function() {
+  gameScene.preload = function() {
     this.load.image('background', 'assets/backgrounds/main.png');
     this.load.image('wall-left-top',
       'assets/backgrounds/wall-left-top.png');
@@ -101,8 +122,6 @@
     this.load.image('booth',
       'assets/backgrounds/booth.png');
 
-    this.load.audio('theme',
-      ['assets/music/ld42-ballad.mp3', 'assets/music/ld42-ballad.ogg']);
     this.load.audio('sndMoney',
       ['assets/sounds/money.mp3', 'assets/sounds/money.ogg']);
     this.load.audio('sndDoorOpen',
@@ -134,7 +153,7 @@
       { frameWidth: 25, frameHeight: 51});
   };
 
-  scene.create = function() {
+  gameScene.create = function() {
     this.add.image(0, 0, 'background').setOrigin(0, 0);
     deliveryZone = this.add.image(103, 550, 'loading-zone');
 
@@ -184,9 +203,6 @@
       fontFamily: 'gameplay', fontSize: 34, color: '#EEE' }, uiGroup);
     arrow = uiGroup.create(10, 10, 'arrow');
 
-    music = this.sound.add('theme');
-    music.play();
-
     sndMoney = this.sound.add('sndMoney');
     sndDoorOpen = this.sound.add('sndDoorOpen');
     sndDoorClose = this.sound.add('sndDoorClose');
@@ -198,9 +214,9 @@
     sndCar.volume = 0.5;
   };
 
-  scene.initializeCarSprite = function(car) {
+  gameScene.initializeCarSprite = function(car) {
     const carSprite = npcCarGroup.create(
-          214/2, -car.height / 2-5, 'car-' + car.sprIndex);
+          214/2, - car.height, 'car-' + car.sprIndex);
     carSprite.speed = 0;
     carSprite.body.moves = false;
     carSprite.angle = 90;
@@ -211,20 +227,21 @@
     return carSprite;
   };
 
-  scene.updateTime = function() {
+  gameScene.updateTime = function() {
     timer += 1;
     if (timer >= timeSpeed) {
       timer = 0;
       time += 1;
       textTime.setText(minToTime(time));
-      const newCar = levelCars.find((car) => car.timeArrival === time);
+      const newCar = levelCars[currentLevel].find(
+        (car) => car.timeArrival === time);
       if (newCar) {
         npcCars.push(this.initializeCarSprite(newCar));
       }
     }
   };
 
-  scene.updateControlledCar = function() {
+  gameScene.updateControlledCar = function() {
     currentCar.body.angularVelocity = 0;
     currentCar.acceleration = 10;
     // just realized that the body colliders don't rotate in phaser...
@@ -284,7 +301,7 @@
     }
   };
 
-  scene.updateCharacter = function() {
+  gameScene.updateCharacter = function() {
     player.body.velocity.x = 0;
     player.body.velocity.y = 0;
     player.body.angularVelocity = 0;
@@ -323,7 +340,7 @@
     }
   };
 
-  scene.enterCar = function(car) {
+  gameScene.enterCar = function(car) {
     currentCar = car;
     inCar = true;
     car.body.moves = true;
@@ -338,19 +355,19 @@
     if (car.data.isNPC &&
         car.data.npcSprite && car.data.npcSprite.body.enable) {
       car.data.npcSprite.disableBody(true, true);
-      waitingNpcs
-        .filter((npc) => npc.waitingForService)
-        .forEach((npc) => {
-          if (npc.speech) {
-            npc.speech.destroy();
-            npc.speechText.destroy();
-            npc.waitingForService = false;
-            npc.willPickupCar = true;
-          }
-        });
+      if (waitingNpc && waitingNpc.waitingForService) {
+        if (waitingNpc.speech) {
+          waitingNpc.speech.destroy();
+          waitingNpc.speechText.destroy();
+          waitingNpc.waitingForService = false;
+          waitingNpc.willPickupCar = true;
+          // the npc will now go to the pending queue
+          pendingCustomers.push(waitingNpc);
+          waitingNpc = null;
+        }
+      }
     }
     car.data.isNPC = false;
-
     car.setCollideWorldBounds(true);
     car.setBounce(0.2);
     car.setMaxVelocity(CAR_MAX_VELOCITY, CAR_MAX_VELOCITY);
@@ -370,7 +387,7 @@
     }, 500);
   };
 
-  scene.leaveCar = function() {
+  gameScene.leaveCar = function() {
     // calculate the coordinate of the player
     let doorX, doorY;
     if (!currentCar.bodyHorizontal && currentCar.angle > 45 && currentCar.angle < 135) {
@@ -403,33 +420,39 @@
       carReadyForCustomer = false;
       const leavingCustomer = pendingCustomers[0];
       leavingCars.push(leavingCustomer.car);
-      try{ // this sometimes fails for some reason..
-        if (leavingCustomer.waiting) {
+      if (leavingCustomer.impatient) {
         leavingCustomer.waiting.destroy();
-        }
-        if (leavingCustomer.angry) {
-          leavingCustomer.angry.destroy();
-        }
-        leavingCustomer.sprite.destroy();
-      } catch (err) {}
+      }
+      if (leavingCustomer.mad) {
+        leavingCustomer.angry.destroy();
+      }
+      leavingCustomer.sprite.destroy();
       if (time < leavingCustomer.timePickup + TIME_GET_IMPATIENT) {
-        this.giveMoney(TIME_GET_FRUSTRATED + TIME_GET_MAD +
+        this.giveMoney(50 +
           (time - leavingCustomer.timePickup + TIME_GET_IMPATIENT));
+      } else if (time < leavingCustomer.timePickup + TIME_GET_FRUSTRATED) {
+        this.giveMoney(15 +
+          (time - leavingCustomer.timePickup + TIME_GET_IMPATIENT));
+      } else if (time < leavingCustomer.timePickup + TIME_GET_MAD) {
+        this.giveMoney(5 +
+          (time - leavingCustomer.timePickup + TIME_GET_MAD));
       }
       pendingCustomers = pendingCustomers.slice(1);
       leavingCustomer.car.data.readyForPickup = false;
       pendingCustomers = pendingCustomers.filter(
         (customer) => customer != leavingCustomer);
-      // also remove the obj from waitingNpcs
-      waitingNpcs = waitingNpcs.filter(
-        (npc) => npc.car != leavingCustomer.car);
     }
   }
 
-  scene.updateLeavingCars = function() {
+  gameScene.updateLeavingCars = function() {
     let toRemove = null;
     leavingCars.forEach((car, index) => {
       car.y += 1;
+      if (car.angle > 90) {
+        car.angle -= 1;
+      } else if (car.angle < 90) {
+        car.angle += 1;
+      }
       if (car.y > 1000) {
         delete(car.data);
         car.destroy();
@@ -442,7 +465,7 @@
     }
   }
 
-  scene.updateNpcCar = function(car) {
+  gameScene.updateNpcCar = function(car) {
     if (!car.data.isNPC) return;
     let canMove = true;
     const rect = new Phaser.Geom.Rectangle(
@@ -490,20 +513,20 @@
         npcSprite.speed = 0;
         npcSprite.body.moves = false;
         car.data.npcSprite = npcSprite;
-        waitingNpcs.push({
+        waitingNpc = {
           sprite: npcSprite,
           waitingForService: true,
           hasWaitedFor: 0,
           timePickup: car.data.timePickup,
           car: car,
-        });
+        };
         this.physics.add.collider(player, npcSprite);
       }
     }
   };
 
   // current car to move out
-  scene.updateCurrentTargetCar = function() {
+  gameScene.updateCurrentTargetCar = function() {
     let displayed = false;
 
     if (pendingCustomers.length > 0) {
@@ -511,7 +534,6 @@
       const car = nextCustomer.car;
       if (!inCar || (currentCar != car)) {
         displayed = true;
-        this.scene.bringToTop(arrow);
         arrow.y = car.y - 100;
         arrow.x = car.x;
       }
@@ -527,12 +549,12 @@
     }
   }
 
-  scene.giveMoney = function(amount) {
+  gameScene.giveMoney = function(amount) {
     actualMoney += amount;
     sndMoney.play();
   }
 
-  scene.updateMoney = function() {
+  gameScene.updateMoney = function() {
     if (money < actualMoney) {
       money += 1;
       textMoney.setStyle(
@@ -543,16 +565,16 @@
     }
   }
 
-  scene.updateWaitingNpcs = function() {
-    waitingNpcs.forEach((npc) => {
+  gameScene.updateWaitingNpc = function() {
+    if (waitingNpc) {
+      const npc = waitingNpc;
       if (npc.waitingForService) {
         npc.hasWaitedFor += 1;
-        if (npc.hasWaitedFor == 60 && npc.sprite.body.enable) {
+        if (npc.hasWaitedFor == 30 && npc.sprite.body.enable) {
           npc.speech = uiGroup.create(
             npc.sprite.x + 70,
             npc.sprite.y - 40,
             'speech-bubble');
-
           npc.speechText = this.add.text(
             npc.speech.x-npc.speech.width/2 + 20,
             npc.speech.y-npc.speech.height/2 + 5,
@@ -560,35 +582,38 @@
               fontFamily: 'gameplay', fontSize: 14, color: '#820b0b'
             }, uiGroup);
         }
-      } else if (npc.willPickupCar && !npc.appeared) {
-        if (time === npc.timePickup) {
-          npc.sprite.enableBody(
-            false, 0, 0, true, true);
-          npc.sprite.x = 200;
-          npc.sprite.y = 480 + pendingCustomers.length * 20
-          npc.sprite.angle = random(-75, -105);
-          npc.appeared = true;
-          sndWaiting.play();
-          pendingCustomers.push(npc);
-        }
+      }
+    }
+  }
+
+  gameScene.updatePendingCustomers = function() {
+    pendingCustomers.forEach((npc) => {
+      if (npc.willPickupCar && !npc.appeared && time === npc.timePickup) {
+        npc.appeared = true; // prevent to visit this twice
+        npc.sprite.enableBody(
+          false, 0, 0, true, true);
+        npc.sprite.x = 200;
+        npc.sprite.y = 480 + pendingCustomers.length * 40
+        npc.sprite.angle = random(-75, -105);
+        sndWaiting.play();
       } else if (npc.appeared) {
-        if (time === npc.timePickup + TIME_GET_IMPATIENT && !npc.waiting) {
+        if (time === npc.timePickup + TIME_GET_IMPATIENT && !npc.impatient) {
+          npc.impatient = true;
           npc.waiting = uiGroup.create(
-            npc.sprite.x + 40,
-            npc.sprite.y - 40,
-            'waiting');
+            npc.sprite.x + 40, npc.sprite.y - 40, 'waiting');
         } else if (time > npc.timePickup + TIME_GET_FRUSTRATED &&
                    time < npc.timePickup + TIME_GET_MAD) {
           if (random(1, 20) === 5) {
             npc.sprite.angle = random(-85, -95);
           }
         } else if (time === npc.timePickup + TIME_GET_MAD && !npc.mad) {
+          npc.mad = true;
+          npc.impatient = false;
           npc.waiting.destroy();
           npc.angry = uiGroup.create(
             npc.sprite.x + 40,
             npc.sprite.y - 40,
             'angry');
-          npc.mad = true;
         } else if (time > npc.timePickup + TIME_GET_MAD) {
           if (random(1, 10) == 1) {
             npc.sprite.angle = random(-80, -100);
@@ -599,7 +624,7 @@
     })
   };
 
-  scene.updateDeliveryPlatform = function() {
+  gameScene.updateDeliveryPlatform = function() {
     // only check the tint every couple of frames to avoid flicker
     platformTimer += 1;
 
@@ -608,8 +633,10 @@
       // player is in car
       deliveryZone.tint = TINT_NONE;
       carReadyForCustomer = false;
-      if (pendingCustomers.length > 0) {
-        const nextCustomer = pendingCustomers[0];
+      const sortedCustomers = pendingCustomers.sort(
+        (c1, c1) =>  c1.timePickup <= c2.timePickup);
+      if (sortedCustomers.length > 0) {
+        const nextCustomer = sortedCustomers[0];
         const car = nextCustomer.car;
         if (currentCar == car) {
           const carRect = new Phaser.Geom.Rectangle(
@@ -632,14 +659,15 @@
     }
   };
 
-  scene.update = function() {
+  gameScene.update = function() {
     this.updateTime();
     this.updateMoney();
     if (!music.isPlaying) {
       music.play();
     }
     textMoney.setText("$" + money);
-    this.updateWaitingNpcs();
+    this.updateWaitingNpc(); // person who waits for service
+    this.updatePendingCustomers(); // people who are here for pickup
     this.updateCurrentTargetCar();
     this.updateDeliveryPlatform();
     if (inCar) {
@@ -653,6 +681,169 @@
     this.updateLeavingCars();
   };
 
+
+  /******
+   * MAIN MENU
+   ******/
+  const menuScene = new Phaser.Scene('MainMenu');
+  let menuBg;
+  let textMenuInstructions, textMenuPlay;
+  let currentOption = 0;
+  let button;
+  let keyPressed = false;
+
+  menuScene.preload = function() {
+    this.load.image('menu-bg', 'assets/backgrounds/mainmenu.png');
+    this.load.image('button', 'assets/sprites/button.png');
+    this.load.audio('theme',
+      ['assets/music/ld42-ballad.mp3', 'assets/music/ld42-ballad.ogg']);
+  }
+
+  menuScene.create = function() {
+    menuBg = this.add.image(0, 0, 'menu-bg').setOrigin(0, 0);
+    this.add.text(410, 420, "USE ARROWS+SPACE", {
+      fontFamily: 'gameplay', fontSize: 34, color: '#3f3f74' });
+    textMenuInstructions = this.add.text(120, 500, "HOW TO PLAY", {
+      fontFamily: 'gameplay', fontSize: 34, color: '#FFF' });
+    textMenuPlay = this.add.text(120, 560, "START GAME", {
+      fontFamily: 'gameplay', fontSize: 34, color: '#847e87' });
+    button = this.add.sprite(90, 520, 'button');
+    cursors = this.input.keyboard.createCursorKeys();
+    keyPressed = true;
+    if (!music || !music.isPlaying) {
+      music = this.sound.add('theme');
+      music.play();
+    }
+  }
+
+  menuScene.update = function() {
+    if (cursors.up.isDown && !keyPressed) {
+      keyPressed = true;
+      currentOption -= 1;
+      if (currentOption < 0) {
+        currentOption = 1;
+      }
+    } else if (cursors.down.isDown && !keyPressed) {
+      keyPressed = true;
+      currentOption += 1;
+      if (currentOption > 1) {
+        currentOption = 0;
+      }
+    } else if (cursors.space.isDown && !keyPressed) {
+      keyPressed = true;
+      if (currentOption == 0) {
+        currentLevel = 0;
+        this.scene.start('HowToPlay');
+      } else {
+        this.scene.start('PreLevel');
+      }
+    }
+    if (!cursors.up.isDown && !cursors.down.isDown) {
+      keyPressed = false;
+    }
+
+    if (currentOption == 0) {
+      textMenuInstructions.setStyle({
+        fontFamily: 'gameplay', fontSize: 34, color: '#FFF' });
+      textMenuPlay.setStyle({
+        fontFamily: 'gameplay', fontSize: 34, color: '#847e87' });
+      button.y = 520;
+    } else {
+      textMenuInstructions.setStyle({
+        fontFamily: 'gameplay', fontSize: 34, color: '#847e87' });
+      textMenuPlay.setStyle({
+        fontFamily: 'gameplay', fontSize: 34, color: '#FFF' });
+      button.y = 580;
+    }
+  }
+
+
+  /******
+   * INSTRUCTIONS
+   ******/
+  const howToPlayScene = new Phaser.Scene('HowToPlay');
+
+  howToPlayScene.preload = function() {
+    this.load.image('instructions-bg',
+      'assets/backgrounds/instructions-1.png');
+  }
+
+  howToPlayScene.create = function() {
+    this.add.image(0, 0, 'instructions-bg').setOrigin(0, 0);
+    this.add.text(470, 100, "AS A VALET FOR THE PRESTIGIOUS\n" +
+      "FRENCH LE PARKING, COLLECT AND\n" +
+      "PARK CARS AS THEY ARRIVE.\n\n" +
+      "CHECK THE PICKUP TIME AND\n" +
+      "PARK ACCORDINGLY."
+      , {
+      fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+    this.add.text(120, 440, "WHEN THE TIME ARRIVES\n" +
+      "BRING THE CARS TO THE\n" +
+      "DELIVERY AREA.\n\n" +
+      "HURRY AND YOU MIGHT\n" +
+      "GET A HEFTY TIP."
+      , {
+      fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+    this.add.text(650, 620, "HIT SPACE TO CONTINUE"
+      , {
+      fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
+    keyPressed = true;
+  }
+
+  howToPlayScene.update = function() {
+    if (cursors.space.isDown && !keyPressed) {
+      keyPressed = true;
+      this.scene.start('MainMenu');
+    }
+    if (!cursors.space.isDown) {
+      keyPressed = false;
+    }
+  }
+
+
+  /******
+   * PRE-LEVEL
+   ******/
+  const preLevelScene = new Phaser.Scene('PreLevel');
+
+  preLevelScene.preload = function() {
+    this.load.image('prelevel',
+      'assets/backgrounds/prelevel.png');
+  }
+
+  preLevelScene.create = function() {
+    this.add.image(0, 0, 'prelevel').setOrigin(0, 0);
+    keyPressed = true;
+    if (isPrevLevelGoodPerf === null) {
+      this.add.text(530, 150,
+        "HA!! ZERE YOU ARE!!\n" +
+        "I COULD SMELL YOU FROM\n" +
+        "ZE STREET!\n\n" +
+        "ZIS IS YOUR FIRST DAY...\n" +
+        "MAYBE ZE LAST HON HON HON!\n\n" +
+        "YOUR WORK STARTS AT 1PM\n" +
+        "UNTIL 7PM. DON'T BE LATE!\n\n" +
+        "NOW GO AND PARK ZE CARS\n" +
+        "AND MAKE VINCENT RICH!"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+      this.add.text(650, 620, "HIT SPACE TO CONTINUE"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
+    }
+  }
+
+  preLevelScene.update = function() {
+    if (cursors.space.isDown && !keyPressed) {
+      keyPressed = true;
+      this.scene.start('Game');
+    }
+    if (!cursors.space.isDown) {
+      keyPressed = false;
+    }
+  }
+
+
   new Phaser.Game({
     type: Phaser.AUTO,
     width: 1024,
@@ -661,7 +852,7 @@
     physics: {
       default: 'arcade',
     },
-    scene: scene
+    scene: [menuScene, howToPlayScene, preLevelScene, gameScene]
   });
 
 })();
