@@ -26,11 +26,16 @@
     return min + Math.floor(Math.random() * (max+1-min));
   }
 
+  function timeToMin(time) {
+    const parts = time.replace("PM", "").split(":");
+    return 720 + parts[0] * 60 + parts[1]*1;
+  }
+
   function makeCar(sprIndex, timeArrival, timePickup) {
     return {
       sprIndex: sprIndex,
-      timeArrival: timeArrival,
-      timePickup: timePickup,
+      timeArrival: timeToMin(timeArrival),
+      timePickup: timeToMin(timePickup),
       npcSprIndex: random(0, NB_NPC_TYPES-1),
       width: carSizes[sprIndex].w,
       height: carSizes[sprIndex].h,
@@ -50,22 +55,24 @@
   const TINT_NONE = 0xffffff;
   const TINT_SUCCESS = 0x99e550;
   const TINT_WARNING = 0xfbf236;
+  const START_AT_LVL = 0;
 
   let wallGroup, npcCarGroup, npcGroup, uiGroup, playerGroup;
   let player, cursors, currentCar, deliveryZone;
   let music;
   let hasPlayerLost = false;
+  let areCustomersAfter7 = false;
   let hasPlayerWon = false;
   let sndMoney, sndDoorOpen, sndDoorClose, sndWaiting, sndSteps, sndCar;
   let inCar = false;
   let gettingInCar = false;
-  let money = 0, time = 13 * 60;
+  let money = 0, time = timeToMin("3:00PM");
   let actualMoney = 0;
   let textCurrentMoney, textTime;
   let cars = [];
   let timer = 0;
   let carReadyForCustomer = false;
-  let currentLevel = 0;
+  let currentLevel = START_AT_LVL;
   const timeSpeed = 60; // the bigger the slower
   const npcStopY = 260;
   let waitingNpc = null; // waiting with speechbubble for time
@@ -74,7 +81,6 @@
   let arrow, arrowTimer = 0, arrowDir = 1;
   let platformTimer = 0;
   let canPlayCarSound = false;
-  let isPrevLevelGoodPerf = null;
 
   const carSizes = [
     {w: 130, h: 78},
@@ -87,21 +93,53 @@
     {w: 130, h: 78},
   ]
 
-  let levelCars = [[
-    makeCar(0, 13*60+5, 13*60+15),
-    makeCar(1, 13*60+20, 13*60+30),
-    makeCar(2, 13*60+35, 13*60+45),
-    makeCar(3, 13*60+45, 15*60+20),
-    makeCar(4, 14*60, 18*60),
-    makeCar(1, 14*60+15, 16*60+10),
-    makeCar(2, 14*60+30, 16*60),
-    makeCar(6, 14*60+45, 17*60),
-    makeCar(7, 15*60, 16*60+30),
-    makeCar(0, 15*60+10, 17*60+20),
-    makeCar(0, 15*60+20, 17*60+30),
-    makeCar(5, 15*60+35, 17*60+30),
-    makeCar(3, 15*60+50, 18*60+15),
-    makeCar(6, 16*60+5, 17*60),
+  let levelCars = [[ // Level 1: 0,1,2,5,6,7
+    makeCar(0, "3:01PM", "3:45PM"),
+    makeCar(1, "3:10PM", "4:25PM"),
+    makeCar(2, "3:20PM", "4:05PM"),
+    makeCar(2, "3:30PM", "4:30PM"),
+    makeCar(1, "3:40PM", "6:00PM"),
+    makeCar(6, "3:50PM", "4:45PM"),
+    makeCar(1, "4:05PM", "5:00PM"),
+    makeCar(5, "4:15PM", "5:10PM"),
+    makeCar(6, "4:25PM", "5:25PM"),
+    makeCar(6, "4:40PM", "5:30PM"),
+    makeCar(5, "4:50PM", "6:10PM"),
+    makeCar(7, "5:05PM", "6:30PM"),
+    makeCar(7, "5:10PM", "6:20PM"),
+    makeCar(5, "5:25PM", "6:40PM"),
+  ], [ // Level 2
+    makeCar(2, "3:01PM", "3:30PM"),
+    makeCar(3, "3:10PM", "4:00PM"),
+    makeCar(4, "3:20PM", "4:05PM"),
+    makeCar(2, "3:30PM", "4:30PM"),
+    makeCar(3, "3:40PM", "6:00PM"),
+    makeCar(6, "3:50PM", "4:45PM"),
+    makeCar(1, "4:00PM", "5:15PM"),
+    makeCar(4, "4:10PM", "5:20PM"),
+    makeCar(6, "4:20PM", "5:30PM"),
+    makeCar(6, "4:30PM", "5:45PM"),
+    makeCar(4, "4:40PM", "6:10PM"),
+    makeCar(7, "4:50PM", "6:00PM"),
+    makeCar(6, "5:00PM", "6:30PM"),
+    makeCar(0, "5:10PM", "6:20PM"),
+    makeCar(2, "5:20PM", "6:40PM"),
+  ], [ // Level 3
+    makeCar(3, "3:01PM", "3:30PM"),
+    makeCar(4, "3:10PM", "4:00PM"),
+    makeCar(3, "3:20PM", "4:05PM"),
+    makeCar(4, "3:30PM", "4:30PM"),
+    makeCar(2, "3:40PM", "4:55PM"),
+    makeCar(3, "3:50PM", "4:45PM"),
+    makeCar(6, "4:00PM", "5:15PM"),
+    makeCar(4, "4:10PM", "5:20PM"),
+    makeCar(5, "4:20PM", "5:30PM"),
+    makeCar(6, "4:30PM", "5:45PM"),
+    makeCar(4, "4:40PM", "6:10PM"),
+    makeCar(7, "4:50PM", "6:00PM"),
+    makeCar(5, "5:00PM", "6:30PM"),
+    makeCar(1, "5:10PM", "6:20PM"),
+    makeCar(4, "5:20PM", "6:45PM"),
   ]];
   let npcCars = [];
 
@@ -157,6 +195,8 @@
 
   gameScene.create = function() {
     hasPlayerLost = false;
+    areCustomersAfter7 = false;
+    time = timeToMin("3:00PM");
     this.add.image(0, 0, 'background').setOrigin(0, 0);
     deliveryZone = this.add.image(103, 550, 'loading-zone');
 
@@ -169,7 +209,7 @@
     // BOTTOM WALL
     wallGroup.create(215+800/2, 652+10/2, 'wall-bottom');
     // RIGHT WALL
-    wallGroup.create(1014+10/2, 0+662/2, 'wall-right');
+    wallGroup.create(844+180/2, 71+580/2, 'wall-right');
     wallGroup.create(215+140/2, 196+120/2, 'booth');
 
     npcCarGroup = this.physics.add.group({});
@@ -240,6 +280,16 @@
         (car) => car.timeArrival === time);
       if (newCar) {
         npcCars.push(this.initializeCarSprite(newCar));
+      }
+      if (time === timeToMin("7:00PM")) { // end of the level!
+        // check to see if there are waiting customers still
+        const waitingOutside = pendingCustomers.filter((c) => c.appeared);
+        areCustomersAfter7 = waitingOutside.length > 0;
+        currentLevel += 1;
+        if (currentLevel > 2) {
+          hasPlayerWon = true;
+        }
+        this.scene.start('PreLevel');
       }
     }
   };
@@ -506,7 +556,6 @@
     if (canMove && car.y < npcStopY) {
       car.y += 1;
       if (car.y === npcStopY) { // unload passanger who becomes a waitingNpc
-        car.data.readyForPickup = true;
         const npcSprite = this.physics.add.sprite(
               car.x - car.width/2 - 10,
               car.y + car.height/2,
@@ -562,11 +611,15 @@
   gameScene.updateMoney = function() {
     if (money < actualMoney) {
       money += 1;
-      textMoney.setStyle(
-        {fontFamily: 'gameplay', fontSize: 38, color: '#6abe30' });
+      if (textMoney.style.color === "#EEE") {
+        textMoney.setStyle(
+          {fontFamily: 'gameplay', fontSize: 38, color: '#6abe30' });
+      }
     } else {
-      textMoney.setStyle(
-        {fontFamily: 'gameplay', fontSize: 34, color: '#EEE' });
+      if (textMoney.style.color === "#6abe30") {
+        textMoney.setStyle(
+          {fontFamily: 'gameplay', fontSize: 34, color: '#EEE' });
+      }
     }
   }
 
@@ -576,6 +629,7 @@
       if (npc.waitingForService) {
         npc.hasWaitedFor += 1;
         if (npc.hasWaitedFor == 30 && npc.sprite.body.enable) {
+          npc.car.data.readyForPickup = true;
           npc.speech = uiGroup.create(
             npc.sprite.x + 70,
             npc.sprite.y - 40,
@@ -726,6 +780,9 @@
 
   menuScene.create = function() {
     hasPlayerLost = false;
+    hasPlayerWon = false;
+    areCustomersAfter7 = false;
+    currentLevel = START_AT_LVL;
     menuBg = this.add.image(0, 0, 'menu-bg').setOrigin(0, 0);
     this.add.text(410, 420, "USE ARROWS+SPACE", {
       fontFamily: 'gameplay', fontSize: 34, color: '#3f3f74' });
@@ -758,7 +815,7 @@
     } else if (cursors.space.isDown && !keyPressed) {
       keyPressed = true;
       if (currentOption == 0) {
-        currentLevel = 0;
+        currentLevel = START_AT_LVL;
         this.scene.start('HowToPlay');
       } else {
         this.scene.start('PreLevel');
@@ -855,6 +912,22 @@
         "THANKS FOR PLAYING!\n" +
         "FINAL SCORE: $" + actualMoney, {
         fontFamily: 'gameplay', fontSize: 20, color: '#FBF236' });
+    } else if (areCustomersAfter7) {
+      this.add.text(530, 120, "YOU LOST!", {
+        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
+      this.add.text(530, 200,
+        "WHAT DO YOU ZINC!!\n" +
+        "WE ARE CLOSED NOW!!\n\n" +
+        "ZERE IS STILL CUSTOMERS,\n" +
+        "WE LOST ZE MONEY!!\n\n" +
+        "YOUR FIRED!! FIRED!!!"
+        , {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
+      this.add.text(530, 450,
+        "THANKS FOR PLAYING!\n" +
+        "FINAL SCORE: $" + actualMoney, {
+        fontFamily: 'gameplay', fontSize: 20, color: '#FBF236' });
+
     } else if (hasPlayerWon) {
       this.add.text(530, 120, "YOU WON!", {
         fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
@@ -873,15 +946,15 @@
         fontFamily: 'gameplay', fontSize: 20, color: '#FBF236' });
 
     } else if (currentLevel === 0) {
-      this.add.text(530, 120, "MONDAY", {
+      this.add.text(530, 120, "FRIDAY", {
         fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
       this.add.text(530, 200,
         "HON HON!! ZERE YOU ARE!!\n" +
         "I COULD SMELL YOU FROM\n" +
         "ZE STREET!\n\n" +
-        "YOUR HERE UNTIL FRIDAY...\n" +
+        "YOUR HERE FOR WEEKEND...\n" +
         "IF I DONT FIRE YOU BEFORE!\n\n" +
-        "YOUR WORK STARTS AT 1PM\n" +
+        "YOUR WORK STARTS AT 3PM\n" +
         "UNTIL 7PM. NO SLEEP!!\n\n" +
         "NOW GO AND PARK ZE CARS\n" +
         "AND MAKE VINCENT RICH!"
@@ -891,7 +964,7 @@
         , {
         fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
     } else if (currentLevel === 1) {
-      this.add.text(530, 120, "TUESDAY", {
+      this.add.text(530, 120, "SATURDAY", {
         fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
       this.add.text(530, 200,
         "STILL HERE?! HON HON!!\n" +
@@ -899,53 +972,25 @@
         "YOU MAKE ME RICH AND YOU\n" +
         "WILL GET ZE BAGETTE I GOT!\n\n" +
         "NOW GO AND STOP WASTING\n" +
-        "ZE TIME OF ZE VINCENT!!\n\n"
+        "ZE TIME OF ZE VINCENT!!\n\n" +
+        "I AM BUZY TASTING ZIS\n" +
+        "SWEET WINE... GO!\n\n"
         , {
         fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
       this.add.text(650, 620, "HIT SPACE TO CONTINUE"
         , {
         fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
     } else if (currentLevel === 2) {
-      this.add.text(530, 120, "WEDNESDAY", {
-        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
-      this.add.text(530, 200,
-        "YOU NOT GIVE UP YET?\n" +
-        "YOU SURE ARE NOT FRENCH!\n\n" +
-        "I NEED TO GO GET MY\n" +
-        "CHEESE FOR ZE WINE!\n\n" +
-        "DON'T YOU HAVE ZE JOB?\n" +
-        "WHY AM I PAYING YOU?!\n\n"
-        , {
-        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
-      this.add.text(650, 620, "HIT SPACE TO CONTINUE"
-        , {
-        fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
-    } else if (currentLevel === 3) {
-      this.add.text(530, 120, "THURSDAY", {
-        fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
-      this.add.text(530, 200,
-        "LOOK AT ZE NEW CAR I BOUGHT!\n\n" +
-        "DONT FORGET MY CHILD...\n\n" +
-        "IF YOU TOO WORK REALLY,\n" +
-        "REALLY REALLY HARD... THEN\n" +
-        "MAYBE I CAN BUY ANOZER ONE.\n\n" +
-        "ARE WE STILL TALKING?!\n\n"
-        , {
-        fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
-      this.add.text(650, 620, "HIT SPACE TO CONTINUE"
-        , {
-        fontFamily: 'gameplay', fontSize: 20, color: '#CCC' });
-    } else if (currentLevel === 4) {
-      this.add.text(530, 120, "FRIDAY", {
+      this.add.text(530, 120, "SUNDAY", {
         fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
       this.add.text(530, 200,
         "ZIS IS YOUR LAST DAY!\n" +
         "YOU WILL MISS ME, RITE?\n\n" +
-        "YOUR REALLY A SAD CHILD\n" +
-        "IF YOU DONT COME BACK\n\n" +
-        "YOU WILL ALWAYS HAVE A\n" +
-        "PLACE IN MY HEART AND\n" +
-        "IN MY WALLET.\n\n"
+        "LOOK AT ZE NEW CAR I BOUGHT!\n\n" +
+        "TELL YOU WHAT. IF YOU WORK\n" +
+        "REALLY, REALLY HARD... THEN\n" +
+        "MAYBE I CAN BUY ANOZER ONE!\n\n" +
+        "WHY ARE WE STILL TALKING?!\n\n"
         , {
         fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
       this.add.text(650, 620, "HIT SPACE TO CONTINUE"
@@ -957,7 +1002,7 @@
   preLevelScene.update = function() {
     if (cursors.space.isDown && !keyPressed) {
       keyPressed = true;
-      if (hasPlayerLost) {
+      if (hasPlayerLost || hasPlayerWon || areCustomersAfter7) {
         this.scene.start('MainMenu');
       } else {
         this.scene.start('Game');

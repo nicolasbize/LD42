@@ -44,18 +44,24 @@ TASK BREAKDOWN:
 [X] GUI with time / $$$
 [X] AI
 [X] Collisions
-[-] Levels (more cars, etc.)
 [X] Music
 [X] FX
 [X] Title screen
 [X] Main menu (NEW GAME, HOW TO PLAY, HIGH SCORES)
-[ ] End of level
-[ ] End of game
-[-] Terrible boss image + funny between levels
-[-] Polishing, bugfixing
-
-- case where people wait for service for too long...
+[X] End of level
+[X] End of game
+[X] Terrible boss image + funny between levels
+[X] Levels (more cars, etc.)
+[X] Polishing, bugfixing
+[ ] Publish!
 
 Bugs:
 - The collisions don't work well with rectangles...
+
+Nice to have:
+- Preloader...
+- NPCs currently disappear, it'd be nice to have some sort of animation
+- A new image for the end to have some additional candy.
+
+GOING TO PUBLISH!!
 
