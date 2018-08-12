@@ -81,6 +81,7 @@
   let arrow, arrowTimer = 0, arrowDir = 1;
   let platformTimer = 0;
   let canPlayCarSound = false;
+  let nbCarsInQueue = 0;
 
   const carSizes = [
     {w: 130, h: 78},
@@ -259,7 +260,7 @@
 
   gameScene.initializeCarSprite = function(car) {
     const carSprite = npcCarGroup.create(
-          214/2, - car.height, 'car-' + car.sprIndex);
+          214/2, - car.height - nbCarsInQueue * 180, 'car-' + car.sprIndex);
     carSprite.speed = 0;
     carSprite.body.moves = false;
     carSprite.angle = 90;
@@ -280,6 +281,7 @@
         (car) => car.timeArrival === time);
       if (newCar) {
         npcCars.push(this.initializeCarSprite(newCar));
+        nbCarsInQueue += 1;
       }
       if (time === timeToMin("7:00PM")) { // end of the level!
         // check to see if there are waiting customers still
@@ -408,6 +410,8 @@
     if (car.data.isNPC &&
         car.data.npcSprite && car.data.npcSprite.body.enable) {
       car.data.npcSprite.disableBody(true, true);
+      nbCarsInQueue -= 1;
+
       if (waitingNpc && waitingNpc.waitingForService) {
         if (waitingNpc.speech) {
           waitingNpc.speech.destroy();
