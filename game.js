@@ -23,7 +23,7 @@
   }
 
   let wallGroup, npcCarGroup, npcGroup, uiGroup, playerGroup;
-  let player, cursors, currentCar;
+  let player, cursors, currentCar, deliveryZone;
   const CAR_FRICTION = 0.97;
   const CAR_MAX_VELOCITY = 300;
   const HUMAN_MAX_VELOCITY = 200;
@@ -32,17 +32,23 @@
   const TIME_GET_IMPATIENT = 5;
   const TIME_GET_FRUSTRATED = 10;
   const TIME_GET_MAD = 20;
+  const TINT_NONE = 0xffffff;
+  const TINT_SUCCESS = 0x99e550;
+  const TINT_WARNING = 0xfbf236;
   let inCar = false;
   let gettingInCar = false;
   let money = 0, time = 7 * 60;
   let textCurrentMoney, textTime;
   let cars = [];
   let timer = 0;
+  let carReadyForCustomer = false;
   const timeSpeed = 60; // the bigger the slower
   const npcStopY = 260;
-  const waitingNpcs = [];
+  let waitingNpcs = [];
   let pendingCustomers = [];
+  let leavingCars = [];
   let arrow, arrowTimer = 0, arrowDir = 1;
+  let platformTimer = 0;
 
 
   let levelCars = [{
@@ -103,12 +109,15 @@
     this.load.image('happy', 'assets/sprites/happy.png');
     this.load.image('angry', 'assets/sprites/angry.png');
     this.load.image('arrow', 'assets/sprites/arrow.png');
+    this.load.image('loading-zone',
+      'assets/sprites/loading-zone.png');
     this.load.spritesheet('player', 'assets/sprites/player.png',
       { frameWidth: 25, frameHeight: 51});
   };
 
   scene.create = function() {
     this.add.image(0, 0, 'background').setOrigin(0, 0);
+    deliveryZone = this.add.image(103, 550, 'loading-zone');
 
     wallGroup = this.physics.add.staticGroup();
     // LEFT WALL
@@ -233,30 +242,7 @@
     }
 
     if (cursors.space.isDown && currentCar.speed < 10 && !gettingInCar) {
-      // calculate the coordinate of the player
-      let doorX, doorY;
-      if (!currentCar.bodyHorizontal && currentCar.angle > 45 && currentCar.angle < 135) {
-        doorX = currentCar.x + 60;
-        doorY = currentCar.y + 15;
-        // looking up
-      } else if (!currentCar.bodyHorizontal && currentCar.angle > -135 && currentCar.angle < -45) {
-        doorX = currentCar.x - 60;
-        doorY = currentCar.y - 15;
-      } else if (currentCar.bodyHorizontal && currentCar.angle < 45 && currentCar.angle > -45) {
-        doorX = currentCar.x + 15;
-        doorY = currentCar.y - 60;
-      } else {
-        doorX = currentCar.x - 15;
-        doorY = currentCar.y + 60;
-      }
-      inCar = false;
-      currentCar.body.moves = false;
-      player.enableBody(false, doorX, doorY, true, true);
-      player.setPosition(doorX, doorY);
-      gettingInCar = true;
-      setTimeout(function() {
-        gettingInCar = false;
-      }, 500);
+      this.leaveCar();
     } else {
       this.physics.velocityFromAngle(currentCar.angle,
         currentCar.speed,
@@ -340,6 +326,71 @@
       gettingInCar = false;
     }, 500);
   };
+
+  scene.leaveCar = function() {
+    // calculate the coordinate of the player
+    let doorX, doorY;
+    if (!currentCar.bodyHorizontal && currentCar.angle > 45 && currentCar.angle < 135) {
+      doorX = currentCar.x + 60;
+      doorY = currentCar.y + 15;
+      // looking up
+    } else if (!currentCar.bodyHorizontal && currentCar.angle > -135 && currentCar.angle < -45) {
+      doorX = currentCar.x - 60;
+      doorY = currentCar.y - 15;
+    } else if (currentCar.bodyHorizontal && currentCar.angle < 45 && currentCar.angle > -45) {
+      doorX = currentCar.x + 15;
+      doorY = currentCar.y - 60;
+    } else {
+      doorX = currentCar.x - 15;
+      doorY = currentCar.y + 60;
+    }
+    inCar = false;
+    currentCar.body.moves = false;
+    player.enableBody(false, doorX, doorY, true, true);
+    player.setPosition(doorX, doorY);
+    gettingInCar = true;
+    currentCar = null;
+    setTimeout(function() {
+      gettingInCar = false;
+    }, 500);
+
+    // check if the car was disposed within the delivery area.
+    if (carReadyForCustomer) {
+      carReadyForCustomer = false;
+      const leavingCustomer = pendingCustomers[0];
+      leavingCars.push(leavingCustomer.car);
+      if (leavingCustomer.waiting) {
+        leavingCustomer.waiting.destroy();
+      }
+      if (leavingCustomer.angry) {
+        leavingCustomer.angry.destroy();
+      }
+      leavingCustomer.sprite.destroy();
+      pendingCustomers = pendingCustomers.slice(1);
+      leavingCustomer.car.data.readyForPickup = false;
+      pendingCustomers = pendingCustomers.filter(
+        (customer) => customer != leavingCustomer);
+      // also remove the obj from waitingNpcs
+      waitingNpcs = waitingNpcs.filter(
+        (npc) => npc.car != leavingCustomer.car);
+    }
+  }
+
+  scene.updateLeavingCars = function() {
+    let toRemove = null;
+    leavingCars.forEach((car, index) => {
+      car.y += 1;
+      if (car.y > 1000) {
+        delete(car.data);
+        car.destroy();
+        toRemove = car;
+      }
+    });
+    if (toRemove) {
+      leavingCars = leavingCars.filter((car) => car != toRemove);
+      npcCars = npcCars.filter((car) => car != toRemove);
+    }
+  }
 
   scene.updateNpcCar = function(car) {
     if (!car.data.isNPC) return;
@@ -481,11 +532,45 @@
     })
   };
 
+  scene.updateDeliveryPlatform = function() {
+    // only check the tint every couple of frames to avoid flicker
+    platformTimer += 1;
+
+    if (platformTimer == 30) {
+      platformTimer = 0;
+      // player is in car
+      deliveryZone.tint = TINT_NONE;
+      carReadyForCustomer = false;
+      if (pendingCustomers.length > 0) {
+        const nextCustomer = pendingCustomers[0];
+        const car = nextCustomer.car;
+        if (currentCar == car) {
+          const carRect = new Phaser.Geom.Rectangle(
+            car.x-car.width/2, car.y-car.height/2, car.width, car.height);
+          const deliveryRect = new Phaser.Geom.Rectangle(
+            deliveryZone.x-deliveryZone.width/2,
+            deliveryZone.y-deliveryZone.height/2,
+            deliveryZone.width,
+            deliveryZone.height);
+          let intersection = Phaser.Geom.Intersects.GetRectangleIntersection(
+            carRect, deliveryRect);
+          if (intersection.height == carRect.height) {
+            carReadyForCustomer = true;
+            deliveryZone.tint = TINT_SUCCESS;
+          } else if (intersection.height > 0) {
+            deliveryZone.tint = TINT_WARNING;
+          }
+        }
+      }
+    }
+  };
+
   scene.update = function() {
     this.updateTime();
     textMoney.setText("$" + money);
     this.updateWaitingNpcs();
     this.updateCurrentTargetCar();
+    this.updateDeliveryPlatform();
     if (inCar) {
       this.updateControlledCar();
     } else {
@@ -493,7 +578,8 @@
     }
     npcCars.forEach((car) => {
       this.updateNpcCar(car);
-    })
+    });
+    this.updateLeavingCars();
   };
 
   new Phaser.Game({
