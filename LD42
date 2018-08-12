@@ -47,14 +47,13 @@ TASK BREAKDOWN:
 [X] Levels (more cars, etc.)
 [X] Music
 [X] FX
-[ ] Title screen
-[ ] Main menu (NEW GAME, HOW TO PLAY, HIGH SCORES)
+[X] Title screen
+[X] Main menu (NEW GAME, HOW TO PLAY, HIGH SCORES)
 [ ] End screen
-[ ] Terrible boss image + funny between levels
+[-] Terrible boss image + funny between levels
 [ ] Polishing, bugfixing
 
 
 Bugs:
-- Sometimes the people waiting don't disappear
 - The collisions don't work well with rectangles...
 

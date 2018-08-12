@@ -86,9 +86,9 @@
   ]
 
   let levelCars = [[
-    makeCar(0, 13*60+5, 14*60+15),
-    makeCar(1, 13*60+20, 16*60),
-    makeCar(2, 13*60+35, 17*60+15),
+    makeCar(0, 13*60+5, 13*60+15),
+    makeCar(1, 13*60+20, 13*60+30),
+    makeCar(2, 13*60+35, 13*60+45),
     makeCar(3, 13*60+45, 15*60+20),
     makeCar(4, 14*60, 18*60),
     makeCar(1, 14*60+15, 16*60+10),
@@ -363,6 +363,8 @@
           waitingNpc.willPickupCar = true;
           // the npc will now go to the pending queue
           pendingCustomers.push(waitingNpc);
+          pendingCustomers = pendingCustomers.sort(
+            (c1,c2) => c1.timePickup >= c2.timePickup);
           waitingNpc = null;
         }
       }
@@ -419,6 +421,7 @@
     if (carReadyForCustomer) {
       carReadyForCustomer = false;
       const leavingCustomer = pendingCustomers[0];
+      leavingCustomer.appeared = false;
       leavingCars.push(leavingCustomer.car);
       if (leavingCustomer.impatient) {
         leavingCustomer.waiting.destroy();
@@ -428,19 +431,16 @@
       }
       leavingCustomer.sprite.destroy();
       if (time < leavingCustomer.timePickup + TIME_GET_IMPATIENT) {
-        this.giveMoney(50 +
-          (time - leavingCustomer.timePickup + TIME_GET_IMPATIENT));
+        this.giveMoney(30 + random(10,15));
       } else if (time < leavingCustomer.timePickup + TIME_GET_FRUSTRATED) {
-        this.giveMoney(15 +
-          (time - leavingCustomer.timePickup + TIME_GET_IMPATIENT));
+        this.giveMoney(20 + random(5,15));
       } else if (time < leavingCustomer.timePickup + TIME_GET_MAD) {
-        this.giveMoney(5 +
-          (time - leavingCustomer.timePickup + TIME_GET_MAD));
+        this.giveMoney(10 + random(5,10));
       }
-      pendingCustomers = pendingCustomers.slice(1);
       leavingCustomer.car.data.readyForPickup = false;
       pendingCustomers = pendingCustomers.filter(
         (customer) => customer != leavingCustomer);
+      this.reorderPeopleWaitingOutside();
     }
   }
 
@@ -529,8 +529,10 @@
   gameScene.updateCurrentTargetCar = function() {
     let displayed = false;
 
-    if (pendingCustomers.length > 0) {
-      const nextCustomer = pendingCustomers[0];
+    let waitingCustomers = (pendingCustomers || [])
+      .filter(c => c.appeared);
+    if (waitingCustomers.length > 0) {
+      const nextCustomer = waitingCustomers[0];
       const car = nextCustomer.car;
       if (!inCar || (currentCar != car)) {
         displayed = true;
@@ -587,13 +589,15 @@
   }
 
   gameScene.updatePendingCustomers = function() {
+    const waitingOutside = pendingCustomers.filter((c) => c.appeared);
+    const nbCurrentlyWaitingOutside = waitingOutside.length;
     pendingCustomers.forEach((npc) => {
       if (npc.willPickupCar && !npc.appeared && time === npc.timePickup) {
         npc.appeared = true; // prevent to visit this twice
         npc.sprite.enableBody(
           false, 0, 0, true, true);
         npc.sprite.x = 200;
-        npc.sprite.y = 480 + pendingCustomers.length * 40
+        npc.sprite.y = 480 + nbCurrentlyWaitingOutside * 40;
         npc.sprite.angle = random(-75, -105);
         sndWaiting.play();
       } else if (npc.appeared) {
@@ -620,9 +624,22 @@
           }
         }
       }
-
-    })
+    });
   };
+
+  gameScene.reorderPeopleWaitingOutside = function() {
+    // list is already sorted, we just need to move the people and whatever
+    // they are saying
+    const waitingOutside = pendingCustomers.filter((c) => c.appeared);
+    waitingOutside.forEach((npc, index) => {
+      npc.sprite.y = 480 + index * 40;
+      if (npc.impatient) {
+        npc.waiting.y = npc.sprite.y - 40;
+      } else if (npc.mad) {
+        npc.angry.y = npc.sprite.y - 40;
+      }
+    });
+  }
 
   gameScene.updateDeliveryPlatform = function() {
     // only check the tint every couple of frames to avoid flicker
@@ -633,10 +650,10 @@
       // player is in car
       deliveryZone.tint = TINT_NONE;
       carReadyForCustomer = false;
-      const sortedCustomers = pendingCustomers.sort(
-        (c1, c1) =>  c1.timePickup <= c2.timePickup);
-      if (sortedCustomers.length > 0) {
-        const nextCustomer = sortedCustomers[0];
+      let waitingCustomers = (pendingCustomers || [])
+        .filter(c => c.appeared);
+      if (waitingCustomers.length > 0) {
+        const nextCustomer = waitingCustomers[0];
         const car = nextCustomer.car;
         if (currentCar == car) {
           const carRect = new Phaser.Geom.Rectangle(
