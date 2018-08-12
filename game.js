@@ -22,8 +22,6 @@
     return min + Math.floor(Math.random() * (max+1-min));
   }
 
-  let wallGroup, npcCarGroup, npcGroup, uiGroup, playerGroup;
-  let player, cursors, currentCar, deliveryZone;
   const CAR_FRICTION = 0.97;
   const CAR_MAX_VELOCITY = 300;
   const HUMAN_MAX_VELOCITY = 200;
@@ -35,9 +33,15 @@
   const TINT_NONE = 0xffffff;
   const TINT_SUCCESS = 0x99e550;
   const TINT_WARNING = 0xfbf236;
+
+  let wallGroup, npcCarGroup, npcGroup, uiGroup, playerGroup;
+  let player, cursors, currentCar, deliveryZone;
+  let music;
+  let sndMoney, sndDoorOpen, sndDoorClose, sndWaiting, sndSteps, sndCar;
   let inCar = false;
   let gettingInCar = false;
   let money = 0, time = 7 * 60;
+  let actualMoney = 0;
   let textCurrentMoney, textTime;
   let cars = [];
   let timer = 0;
@@ -49,7 +53,7 @@
   let leavingCars = [];
   let arrow, arrowTimer = 0, arrowDir = 1;
   let platformTimer = 0;
-
+  let canPlayCarSound = false;
 
   let levelCars = [{
     sprIndex: 0,
@@ -96,6 +100,21 @@
       'assets/backgrounds/wall-right.png');
     this.load.image('booth',
       'assets/backgrounds/booth.png');
+
+    this.load.audio('theme',
+      ['assets/music/ld42-ballad.mp3', 'assets/music/ld42-ballad.ogg']);
+    this.load.audio('sndMoney',
+      ['assets/sounds/money.mp3', 'assets/sounds/money.ogg']);
+    this.load.audio('sndDoorOpen',
+      ['assets/sounds/door-open.mp3', 'assets/sounds/door-open.ogg']);
+    this.load.audio('sndDoorClose',
+      ['assets/sounds/door-close.mp3', 'assets/sounds/door-close.ogg']);
+    this.load.audio('sndWaiting',
+      ['assets/sounds/waiting.mp3', 'assets/sounds/waiting.ogg']);
+    this.load.audio('sndSteps',
+      ['assets/sounds/steps.mp3', 'assets/sounds/steps.ogg']);
+    this.load.audio('sndCar',
+      ['assets/sounds/car.mp3', 'assets/sounds/car.ogg']);
 
     // sprites
     for (let i=0; i<NB_CAR_TYPES; i++) {
@@ -159,12 +178,24 @@
 
     // GUI
     // textCurrentMoney
-    textTime = this.add.text(800, 20, minToTime(time), {
-      fontFamily: 'gameplay', fontSize: 34, color: '#FFF' }, uiGroup);
-    textMoney = this.add.text(230, 20, "$" + money, {
-      fontFamily: 'gameplay', fontSize: 34, color: '#FFF' }, uiGroup);
+    textTime = this.add.text(800, 15, minToTime(time), {
+      fontFamily: 'gameplay', fontSize: 34, color: '#EEE' }, uiGroup);
+    textMoney = this.add.text(230, 15, "$" + money, {
+      fontFamily: 'gameplay', fontSize: 34, color: '#EEE' }, uiGroup);
     arrow = uiGroup.create(10, 10, 'arrow');
 
+    music = this.sound.add('theme');
+    music.play();
+
+    sndMoney = this.sound.add('sndMoney');
+    sndDoorOpen = this.sound.add('sndDoorOpen');
+    sndDoorClose = this.sound.add('sndDoorClose');
+    sndWaiting = this.sound.add('sndWaiting');
+    sndSteps = this.sound.add('sndSteps');
+    sndCar = this.sound.add('sndCar');
+    sndSteps.volume = 0.5;
+    sndWaiting.volume = 0.5;
+    sndCar.volume = 0.5;
   };
 
   scene.initializeCarSprite = function(car) {
@@ -221,6 +252,9 @@
         s * Math.abs(currentCar.speed / 2);
     }
     if (cursors.up.isDown) {
+      if (!sndCar.isPlaying && canPlayCarSound) {
+        sndCar.play();
+      }
       currentCar.speed += currentCar.acceleration;
       if (currentCar.speed > CAR_MAX_VELOCITY) {
         currentCar.speed = CAR_MAX_VELOCITY;
@@ -269,6 +303,9 @@
       this.physics.velocityFromAngle(
         player.angle, player.speed, player.body.velocity);
       player.anims.play('moving', true);
+      if (!sndSteps.isPlaying && timer % 20 == 0) {
+        sndSteps.play();
+      }
     } else {
       player.speed = 0;
       player.anims.play('moving', false);
@@ -292,6 +329,12 @@
     car.body.moves = true;
     player.disableBody(true, true);
     gettingInCar = true;
+    sndDoorOpen.play();
+    canPlayCarSound = false;
+    setTimeout(function() {
+      canPlayCarSound = true;
+    }, 1000);
+
     if (car.data.isNPC &&
         car.data.npcSprite && car.data.npcSprite.body.enable) {
       car.data.npcSprite.disableBody(true, true);
@@ -353,19 +396,26 @@
     setTimeout(function() {
       gettingInCar = false;
     }, 500);
+    sndDoorClose.play();
 
     // check if the car was disposed within the delivery area.
     if (carReadyForCustomer) {
       carReadyForCustomer = false;
       const leavingCustomer = pendingCustomers[0];
       leavingCars.push(leavingCustomer.car);
-      if (leavingCustomer.waiting) {
+      try{ // this sometimes fails for some reason..
+        if (leavingCustomer.waiting) {
         leavingCustomer.waiting.destroy();
+        }
+        if (leavingCustomer.angry) {
+          leavingCustomer.angry.destroy();
+        }
+        leavingCustomer.sprite.destroy();
+      } catch (err) {}
+      if (time < leavingCustomer.timePickup + TIME_GET_IMPATIENT) {
+        this.giveMoney(TIME_GET_FRUSTRATED + TIME_GET_MAD +
+          (time - leavingCustomer.timePickup + TIME_GET_IMPATIENT));
       }
-      if (leavingCustomer.angry) {
-        leavingCustomer.angry.destroy();
-      }
-      leavingCustomer.sprite.destroy();
       pendingCustomers = pendingCustomers.slice(1);
       leavingCustomer.car.data.readyForPickup = false;
       pendingCustomers = pendingCustomers.filter(
@@ -429,12 +479,13 @@
 
     if (canMove && car.y < npcStopY) {
       car.y += 1;
-      if (car.y === npcStopY) {
+      if (car.y === npcStopY) { // unload passanger who becomes a waitingNpc
         car.data.readyForPickup = true;
         const npcSprite = this.physics.add.sprite(
               car.x - car.width/2 - 10,
               car.y + car.height/2,
               'npc-' + car.data.npcSprIndex);
+        sndDoorOpen.play();
         npcSprite.angle = random(-45, 45);
         npcSprite.speed = 0;
         npcSprite.body.moves = false;
@@ -446,7 +497,6 @@
           timePickup: car.data.timePickup,
           car: car,
         });
-
         this.physics.add.collider(player, npcSprite);
       }
     }
@@ -477,6 +527,22 @@
     }
   }
 
+  scene.giveMoney = function(amount) {
+    actualMoney += amount;
+    sndMoney.play();
+  }
+
+  scene.updateMoney = function() {
+    if (money < actualMoney) {
+      money += 1;
+      textMoney.setStyle(
+        {fontFamily: 'gameplay', fontSize: 38, color: '#6abe30' });
+    } else {
+      textMoney.setStyle(
+        {fontFamily: 'gameplay', fontSize: 34, color: '#EEE' });
+    }
+  }
+
   scene.updateWaitingNpcs = function() {
     waitingNpcs.forEach((npc) => {
       if (npc.waitingForService) {
@@ -502,6 +568,7 @@
           npc.sprite.y = 480 + pendingCustomers.length * 20
           npc.sprite.angle = random(-75, -105);
           npc.appeared = true;
+          sndWaiting.play();
           pendingCustomers.push(npc);
         }
       } else if (npc.appeared) {
@@ -567,6 +634,10 @@
 
   scene.update = function() {
     this.updateTime();
+    this.updateMoney();
+    if (!music.isPlaying) {
+      music.play();
+    }
     textMoney.setText("$" + money);
     this.updateWaitingNpcs();
     this.updateCurrentTargetCar();
@@ -586,6 +657,7 @@
     type: Phaser.AUTO,
     width: 1024,
     height: 662,
+    pixelArt: true,
     physics: {
       default: 'arcade',
     },
