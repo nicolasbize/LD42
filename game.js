@@ -197,6 +197,13 @@
   gameScene.create = function() {
     hasPlayerLost = false;
     areCustomersAfter7 = false;
+    cars = [];
+    timer = 0;
+    pendingCustomers = [];
+    leavingCars = [];
+    npcCars = [];
+    nbCarsInQueue = 0;
+
     time = timeToMin("3:00PM");
     this.add.image(0, 0, 'background').setOrigin(0, 0);
     deliveryZone = this.add.image(103, 550, 'loading-zone');
@@ -909,7 +916,7 @@
         "ZE CUSTOMER AWAITS!!\n\n" +
         "I GIVE YOU ALL AND ZIS IS\n" +
         "WHAT I GET BACK?!\n\n" +
-        "YOUR FIRED!! FIRED!!!"
+        "YOUR ZE FIRED!! FIRED!!!"
         , {
         fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
       this.add.text(530, 450,
@@ -920,11 +927,11 @@
       this.add.text(530, 120, "YOU LOST!", {
         fontFamily: 'gameplay', fontSize: 40, color: '#FBF236' });
       this.add.text(530, 200,
-        "WHAT DO YOU ZINC!!\n" +
+        "YOU IMBESILE!!\n" +
         "WE ARE CLOSED NOW!!\n\n" +
         "ZERE IS STILL CUSTOMERS,\n" +
         "WE LOST ZE MONEY!!\n\n" +
-        "YOUR FIRED!! FIRED!!!"
+        "YOUR ZE FIRED!! FIRED!!!"
         , {
         fontFamily: 'gameplay', fontSize: 20, color: '#FFF' });
       this.add.text(530, 450,
